@@ -111,7 +111,7 @@ jobs:
         run: |
           docker pull cnosdb/cnosdb:community-latest
           docker run --name cnosdb -p 8902:8902 -d cnosdb/cnosdb:community-latest
-          until curl -sf http://127.0.0.1:8902/ping 2>/dev/null; do sleep 1; done
+          until nc -z 127.0.0.1 8902 2>/dev/null; do sleep 1; done
       - name: Run Tests
         run: |
           CNOSDB_AVAILABLE=true mvn -Dtest=TestCnosDBNoREC test
