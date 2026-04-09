@@ -31,6 +31,8 @@ import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
+import sqlancer.postgres.ast.PostgresTemporalFunction.TemporalFunctionKind;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowSpecification;
@@ -210,6 +212,36 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
     }
 
     @Override
+    public void visit(PostgresTemporalFunction function) {
+        if (function.getKind() == TemporalFunctionKind.EXTRACT) {
+            sb.append("EXTRACT(");
+            sb.append(function.getModifier());
+            sb.append(" FROM ");
+            visit(function.getArguments()[0]);
+            sb.append(")");
+            return;
+        }
+        sb.append(function.getKind().getFunctionName());
+        sb.append("(");
+        if (function.getModifier() != null) {
+            sb.append("'");
+            sb.append(function.getModifier().replace("'", "''"));
+            sb.append("'");
+            if (function.getArguments().length != 0) {
+                sb.append(", ");
+            }
+        }
+        int i = 0;
+        for (PostgresExpression arg : function.getArguments()) {
+            if (i++ != 0) {
+                sb.append(", ");
+            }
+            visit(arg);
+        }
+        sb.append(")");
+    }
+
+    @Override
     public void visit(PostgresCastOperation cast) {
         if (Randomly.getBoolean()) {
             sb.append("CAST(");
@@ -263,6 +295,24 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             // sb.append(Randomly.getNotCachedInteger(1, 100));
             // sb.append(")");
             // }
+            break;
+        case DATE:
+            sb.append("DATE");
+            break;
+        case TIME:
+            sb.append("TIME");
+            break;
+        case TIMETZ:
+            sb.append("TIME WITH TIME ZONE");
+            break;
+        case TIMESTAMP:
+            sb.append("TIMESTAMP");
+            break;
+        case TIMESTAMPTZ:
+            sb.append("TIMESTAMP WITH TIME ZONE");
+            break;
+        case INTERVAL:
+            sb.append("INTERVAL");
             break;
         default:
             throw new AssertionError(cast.getType());

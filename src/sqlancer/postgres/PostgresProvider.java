@@ -241,13 +241,11 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         password = globalState.getOptions().getPassword();
         host = globalState.getOptions().getHost();
         port = globalState.getOptions().getPort();
-        entryPath = "/test";
         entryURL = globalState.getDbmsSpecificOptions().connectionURL;
         // trim URL to exclude "jdbc:"
         if (entryURL.startsWith("jdbc:")) {
             entryURL = entryURL.substring(5);
         }
-        String entryDatabaseName = entryPath.substring(1);
         databaseName = globalState.getDatabaseName();
 
         try {
@@ -278,51 +276,50 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             if (port == MainOptions.NO_SET_PORT) {
                 port = uri.getPort();
             }
+            String entryDatabaseName = entryPath == null || entryPath.isEmpty() ? "postgres" : entryPath.substring(1);
             entryURL = String.format("%s://%s:%d/%s", uri.getScheme(), host, port, entryDatabaseName);
+            Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
+            globalState.getState().logStatement(String.format("\\c %s;", entryDatabaseName));
+
+            String dropCommand = "DROP DATABASE";
+            boolean forceDrop = Randomly.getBoolean();
+            if (forceDrop) {
+                dropCommand += " FORCE";
+            }
+            dropCommand += " IF EXISTS " + databaseName;
+
+            globalState.getState().logStatement(dropCommand + ";");
+            try (Statement s = con.createStatement()) {
+                s.execute(dropCommand);
+            } catch (SQLException e) {
+                // If force fails, fall back to regular drop
+                if (forceDrop) {
+                    String fallbackDrop = "DROP DATABASE IF EXISTS " + databaseName;
+                    globalState.getState().logStatement(fallbackDrop + ";");
+                    try (Statement s = con.createStatement()) {
+                        s.execute(fallbackDrop);
+                    }
+                } else {
+                    throw e;
+                }
+            }
+
+            // Create database section
+            createDatabaseCommand = getCreateDatabaseCommand(globalState);
+            globalState.getState().logStatement(createDatabaseCommand + ";");
+            try (Statement s = con.createStatement()) {
+                s.execute(createDatabaseCommand);
+            }
+            con.close();
+            URI testUri = new URI(uri.getScheme(), null, host, port, "/" + databaseName, null, null);
+            testURL = testUri.toString();
+            globalState.getState().logStatement(String.format("\\c %s;", databaseName));
+
+            con = DriverManager.getConnection("jdbc:" + testURL, username, password);
+            return new SQLConnection(con);
         } catch (URISyntaxException e) {
             throw new AssertionError(e);
         }
-        Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
-        globalState.getState().logStatement(String.format("\\c %s;", entryDatabaseName));
-
-        String dropCommand = "DROP DATABASE";
-        boolean forceDrop = Randomly.getBoolean();
-        if (forceDrop) {
-            dropCommand += " FORCE";
-        }
-        dropCommand += " IF EXISTS " + databaseName;
-
-        globalState.getState().logStatement(dropCommand + ";");
-        try (Statement s = con.createStatement()) {
-            s.execute(dropCommand);
-        } catch (SQLException e) {
-            // If force fails, fall back to regular drop
-            if (forceDrop) {
-                String fallbackDrop = "DROP DATABASE IF EXISTS " + databaseName;
-                globalState.getState().logStatement(fallbackDrop + ";");
-                try (Statement s = con.createStatement()) {
-                    s.execute(fallbackDrop);
-                }
-            } else {
-                throw e;
-            }
-        }
-
-        // Create database section
-        createDatabaseCommand = getCreateDatabaseCommand(globalState);
-        globalState.getState().logStatement(createDatabaseCommand + ";");
-        try (Statement s = con.createStatement()) {
-            s.execute(createDatabaseCommand);
-        }
-        con.close();
-        int databaseIndex = entryURL.indexOf(entryDatabaseName);
-        String preDatabaseName = entryURL.substring(0, databaseIndex);
-        String postDatabaseName = entryURL.substring(databaseIndex + entryDatabaseName.length());
-        testURL = preDatabaseName + databaseName + postDatabaseName;
-        globalState.getState().logStatement(String.format("\\c %s;", databaseName));
-
-        con = DriverManager.getConnection("jdbc:" + testURL, username, password);
-        return new SQLConnection(con);
     }
 
     protected void readFunctions(PostgresGlobalState globalState) throws SQLException {

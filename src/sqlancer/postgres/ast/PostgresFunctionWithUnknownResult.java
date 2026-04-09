@@ -43,7 +43,8 @@ public enum PostgresFunctionWithUnknownResult {
         public PostgresExpression[] getArguments(PostgresDataType returnType, PostgresExpressionGenerator gen,
                 int depth) {
             PostgresExpression[] args = super.getArguments(returnType, gen, depth);
-            args[0] = gen.generateExpression(PostgresDataType.getRandomType());
+            args[0] = gen.generateExpression(PostgresDataType.INT);
+            args[1] = PostgresConstant.createTextConstant(Randomly.fromOptions("FM999999999", "999999999"));
             return args;
         }
     },

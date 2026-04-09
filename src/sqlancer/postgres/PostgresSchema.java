@@ -31,7 +31,8 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     private final String databaseName;
 
     public enum PostgresDataType {
-        INT, BOOLEAN, TEXT, DECIMAL, FLOAT, REAL, RANGE, MONEY, BIT, INET;
+        INT, BOOLEAN, TEXT, DECIMAL, FLOAT, REAL, RANGE, MONEY, BIT, INET, DATE, TIME, TIMETZ, TIMESTAMP,
+        TIMESTAMPTZ, INTERVAL;
 
         public static PostgresDataType getRandomType() {
             List<PostgresDataType> dataTypes = new ArrayList<>(Arrays.asList(values()));
@@ -43,6 +44,7 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
                 dataTypes.remove(PostgresDataType.RANGE);
                 dataTypes.remove(PostgresDataType.MONEY);
                 dataTypes.remove(PostgresDataType.BIT);
+                dataTypes.remove(PostgresDataType.INTERVAL);
             }
             return Randomly.fromList(dataTypes);
         }
@@ -96,6 +98,25 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
                         case TEXT:
                             constant = PostgresConstant.createTextConstant(randomRowValues.getString(columnIndex));
                             break;
+                        case DATE:
+                            constant = PostgresConstant.createDateConstant(randomRowValues.getString(columnIndex));
+                            break;
+                        case TIME:
+                            constant = PostgresConstant.createTimeConstant(randomRowValues.getString(columnIndex));
+                            break;
+                        case TIMETZ:
+                            constant = PostgresConstant.createTimeWithTimeZoneConstant(randomRowValues.getString(columnIndex));
+                            break;
+                        case TIMESTAMP:
+                            constant = PostgresConstant.createTimestampConstant(randomRowValues.getString(columnIndex));
+                            break;
+                        case TIMESTAMPTZ:
+                            constant = PostgresConstant
+                                    .createTimestampWithTimeZoneConstant(randomRowValues.getString(columnIndex));
+                            break;
+                        case INTERVAL:
+                            constant = PostgresConstant.createIntervalConstant(randomRowValues.getString(columnIndex));
+                            break;
                         default:
                             throw new IgnoreMeException();
                         }
@@ -113,7 +134,8 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     }
 
     public static PostgresDataType getColumnType(String typeString) {
-        switch (typeString) {
+        String normalizedType = typeString.trim().toLowerCase();
+        switch (normalizedType) {
         case "smallint":
         case "integer":
         case "bigint":
@@ -141,6 +163,22 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
             return PostgresDataType.BIT;
         case "inet":
             return PostgresDataType.INET;
+        case "date":
+            return PostgresDataType.DATE;
+        case "time without time zone":
+        case "time":
+            return PostgresDataType.TIME;
+        case "time with time zone":
+        case "timetz":
+            return PostgresDataType.TIMETZ;
+        case "timestamp without time zone":
+        case "timestamp":
+            return PostgresDataType.TIMESTAMP;
+        case "timestamp with time zone":
+        case "timestamptz":
+            return PostgresDataType.TIMESTAMPTZ;
+        case "interval":
+            return PostgresDataType.INTERVAL;
         default:
             throw new AssertionError(typeString);
         }

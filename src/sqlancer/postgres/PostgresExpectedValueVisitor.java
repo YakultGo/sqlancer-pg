@@ -23,6 +23,7 @@ import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 
 public final class PostgresExpectedValueVisitor implements PostgresVisitor {
@@ -101,6 +102,14 @@ public final class PostgresExpectedValueVisitor implements PostgresVisitor {
     @Override
     public void visit(PostgresWindowFunction windowFunction) {
         throw new IgnoreMeException();
+    }
+
+    @Override
+    public void visit(PostgresTemporalFunction function) {
+        print(function);
+        for (PostgresExpression arg : function.getArguments()) {
+            visit(arg);
+        }
     }
 
     @Override

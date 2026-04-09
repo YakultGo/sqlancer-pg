@@ -26,6 +26,7 @@ import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
@@ -75,6 +76,8 @@ public interface PostgresVisitor {
 
     void visit(PostgresWindowFunction windowFunction);
 
+    void visit(PostgresTemporalFunction function);
+
     default void visit(PostgresExpression expression) {
         if (expression instanceof PostgresConstant) {
             visit((PostgresConstant) expression);
@@ -118,6 +121,8 @@ public interface PostgresVisitor {
             visit((PostgresTableReference) expression);
         } else if (expression instanceof PostgresWindowFunction) {
             visit((PostgresWindowFunction) expression);
+        } else if (expression instanceof PostgresTemporalFunction) {
+            visit((PostgresTemporalFunction) expression);
         } else {
             throw new AssertionError(expression);
         }

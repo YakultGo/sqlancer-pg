@@ -35,7 +35,7 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     public String tablespacePath = getDefaultTablespacePath();
 
     @Parameter(names = "--connection-url", description = "Specifies the URL for connecting to the PostgreSQL server", arity = 1)
-    public String connectionURL = String.format("postgresql://%s:%d/test", PostgresOptions.DEFAULT_HOST,
+    public String connectionURL = String.format("postgresql://%s:%d/postgres", PostgresOptions.DEFAULT_HOST,
             PostgresOptions.DEFAULT_PORT);
 
     @Parameter(names = "--extensions", description = "Specifies a comma-separated list of extension names to be created in each test database", arity = 1)

@@ -290,6 +290,24 @@ public final class PostgresCommon {
         case INET:
             sb.append("inet");
             break;
+        case DATE:
+            sb.append("date");
+            break;
+        case TIME:
+            sb.append("time");
+            break;
+        case TIMETZ:
+            sb.append("time with time zone");
+            break;
+        case TIMESTAMP:
+            sb.append("timestamp");
+            break;
+        case TIMESTAMPTZ:
+            sb.append("timestamp with time zone");
+            break;
+        case INTERVAL:
+            sb.append("interval");
+            break;
         default:
             throw new AssertionError(type);
         }

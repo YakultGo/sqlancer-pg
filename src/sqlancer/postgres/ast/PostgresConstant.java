@@ -209,6 +209,22 @@ public abstract class PostgresConstant implements PostgresExpression {
                 } catch (NumberFormatException e) {
                     return PostgresConstant.createIntConstant(-1);
                 }
+            case DATE:
+                return PostgresConstant.createDateConstant(PostgresTemporalUtil.asText(PostgresDataType.DATE, s));
+            case TIME:
+                return PostgresConstant.createTimeConstant(PostgresTemporalUtil.asText(PostgresDataType.TIME, s));
+            case TIMETZ:
+                return PostgresConstant
+                        .createTimeWithTimeZoneConstant(PostgresTemporalUtil.asText(PostgresDataType.TIMETZ, s));
+            case TIMESTAMP:
+                return PostgresConstant
+                        .createTimestampConstant(PostgresTemporalUtil.asText(PostgresDataType.TIMESTAMP, s));
+            case TIMESTAMPTZ:
+                return PostgresConstant.createTimestampWithTimeZoneConstant(
+                        PostgresTemporalUtil.asText(PostgresDataType.TIMESTAMPTZ, s));
+            case INTERVAL:
+                return PostgresConstant
+                        .createIntervalConstant(PostgresTemporalUtil.asText(PostgresDataType.INTERVAL, s));
             case TEXT:
                 return this;
             default:
@@ -318,6 +334,92 @@ public abstract class PostgresConstant implements PostgresExpression {
 
     }
 
+    public static class TemporalConstant extends PostgresConstant {
+
+        private final String value;
+        private final PostgresDataType type;
+
+        public TemporalConstant(String value, PostgresDataType type) {
+            this.value = PostgresTemporalUtil.asText(type, value);
+            this.type = type;
+        }
+
+        @Override
+        public String getTextRepresentation() {
+            return String.format("'%s'::%s", value.replace("'", "''"), getCastTypeName(type));
+        }
+
+        @Override
+        public String getUnquotedTextRepresentation() {
+            return value;
+        }
+
+        @Override
+        public PostgresConstant isEquals(PostgresConstant rightVal) {
+            if (rightVal.isNull()) {
+                return PostgresConstant.createNullConstant();
+            } else if (rightVal instanceof TemporalConstant && rightVal.getExpressionType() == type) {
+                return PostgresConstant.createBooleanConstant(compareInternal(rightVal.getUnquotedTextRepresentation()) == 0);
+            } else if (rightVal.isString()) {
+                return cast(PostgresDataType.TEXT).isEquals(rightVal.cast(PostgresDataType.TEXT));
+            } else {
+                throw new IgnoreMeException();
+            }
+        }
+
+        @Override
+        protected PostgresConstant isLessThan(PostgresConstant rightVal) {
+            if (rightVal.isNull()) {
+                return PostgresConstant.createNullConstant();
+            } else if (rightVal instanceof TemporalConstant && rightVal.getExpressionType() == type) {
+                return PostgresConstant.createBooleanConstant(compareInternal(rightVal.getUnquotedTextRepresentation()) < 0);
+            } else if (rightVal.isString()) {
+                return cast(PostgresDataType.TEXT).isLessThan(rightVal.cast(PostgresDataType.TEXT));
+            } else {
+                throw new IgnoreMeException();
+            }
+        }
+
+        @Override
+        public PostgresConstant cast(PostgresDataType castType) {
+            if (castType == type) {
+                return this;
+            } else if (castType == PostgresDataType.TEXT) {
+                return PostgresConstant.createTextConstant(value);
+            } else {
+                return null;
+            }
+        }
+
+        @Override
+        public PostgresDataType getExpressionType() {
+            return type;
+        }
+
+        private int compareInternal(String otherValue) {
+            return PostgresTemporalUtil.compare(type, value, otherValue);
+        }
+
+        private static String getCastTypeName(PostgresDataType type) {
+            switch (type) {
+            case DATE:
+                return "date";
+            case TIME:
+                return "time";
+            case TIMETZ:
+                return "timetz";
+            case TIMESTAMP:
+                return "timestamp";
+            case TIMESTAMPTZ:
+                return "timestamptz";
+            case INTERVAL:
+                return "interval";
+            default:
+                throw new AssertionError(type);
+            }
+        }
+    }
+
     public static PostgresConstant createNullConstant() {
         return new PostgresNullConstant();
     }
@@ -384,6 +486,30 @@ public abstract class PostgresConstant implements PostgresExpression {
 
     public static PostgresConstant createTextConstant(String string) {
         return new StringConstant(string);
+    }
+
+    public static PostgresConstant createDateConstant(String value) {
+        return new TemporalConstant(value, PostgresDataType.DATE);
+    }
+
+    public static PostgresConstant createTimeConstant(String value) {
+        return new TemporalConstant(value, PostgresDataType.TIME);
+    }
+
+    public static PostgresConstant createTimeWithTimeZoneConstant(String value) {
+        return new TemporalConstant(value, PostgresDataType.TIMETZ);
+    }
+
+    public static PostgresConstant createTimestampConstant(String value) {
+        return new TemporalConstant(value, PostgresDataType.TIMESTAMP);
+    }
+
+    public static PostgresConstant createTimestampWithTimeZoneConstant(String value) {
+        return new TemporalConstant(value, PostgresDataType.TIMESTAMPTZ);
+    }
+
+    public static PostgresConstant createIntervalConstant(String value) {
+        return new TemporalConstant(value, PostgresDataType.INTERVAL);
     }
 
     public abstract static class PostgresConstantBase extends PostgresConstant {
