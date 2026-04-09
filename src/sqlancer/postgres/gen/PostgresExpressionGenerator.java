@@ -59,7 +59,6 @@ import sqlancer.postgres.ast.PostgresPostfixText;
 import sqlancer.postgres.ast.PostgresPrefixOperation;
 import sqlancer.postgres.ast.PostgresPrefixOperation.PrefixOperator;
 import sqlancer.postgres.ast.PostgresSelect;
-import sqlancer.postgres.ast.PostgresSelect.ForClause;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSelect.SelectType;
@@ -94,6 +93,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
 
     private boolean allowAggregateFunctions;
 
+    private boolean allowForClauses = true;
+
     private final Map<String, Character> functionsAndTypes;
 
     private final List<Character> allowedFunctionTypes;
@@ -113,6 +114,11 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
 
     public PostgresExpressionGenerator setRowValue(PostgresRowValue rw) {
         this.rw = rw;
+        return this;
+    }
+
+    public PostgresExpressionGenerator setAllowForClauses(boolean allowForClauses) {
+        this.allowForClauses = allowForClauses;
         return this;
     }
 
@@ -994,6 +1000,11 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     }
 
     public static PostgresSubquery createSubquery(PostgresGlobalState globalState, String name, PostgresTables tables) {
+        return createSubquery(globalState, name, tables, true);
+    }
+
+    public static PostgresSubquery createSubquery(PostgresGlobalState globalState, String name, PostgresTables tables,
+            boolean allowForClauses) {
         List<PostgresExpression> columns = new ArrayList<>();
         PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setColumns(tables.getColumns());
         for (int i = 0; i < Randomly.smallNumber() + 1; i++) {
@@ -1016,9 +1027,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                         PostgresConstant.createIntConstant(Randomly.getPositiveOrZeroNonCachedInteger()));
             }
         }
-        if (Randomly.getBooleanWithRatherLowProbability()) {
-            select.setForClause(ForClause.getRandom());
-        }
+        select.maybeSetRandomForClause(allowForClauses);
         return new PostgresSubquery(select, name);
     }
 
@@ -1058,6 +1067,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             List<PostgresExpression> windowFunctions = generateWindowFunctions();
             select.setWindowFunctions(windowFunctions);
         }
+        select.maybeSetRandomForClause(allowForClauses);
 
         return select;
     }
@@ -1086,7 +1096,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         // JOIN subqueries
         for (int i = 0; i < Randomly.smallNumber(); i++) {
             PostgresTables subqueryTables = globalState.getSchema().getRandomTableNonEmptyTables();
-            PostgresSubquery subquery = createSubquery(globalState, String.format("sub%d", i), subqueryTables);
+            PostgresSubquery subquery = createSubquery(globalState, String.format("sub%d", i), subqueryTables,
+                    allowForClauses);
             PostgresExpression joinClause = generateExpression(PostgresDataType.BOOLEAN);
             PostgresJoinType options = PostgresJoinType.getRandom();
             PostgresJoin j = new PostgresJoin(subquery, joinClause, options);

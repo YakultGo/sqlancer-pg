@@ -65,6 +65,7 @@ public final class PostgresViewGenerator {
         // }
         sb.append(" AS (");
         PostgresSelect select = PostgresRandomQueryGenerator.createRandomQuery(nrColumns, globalState);
+        select.setAllowForClause(false);
         sb.append(PostgresVisitor.asString(select));
         sb.append(")");
         if (Randomly.getBoolean() && !materialized && !recursive) {

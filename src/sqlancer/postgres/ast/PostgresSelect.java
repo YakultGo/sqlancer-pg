@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import sqlancer.Randomly;
 import sqlancer.common.ast.SelectBase;
@@ -18,10 +19,14 @@ import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
 public class PostgresSelect extends SelectBase<PostgresExpression>
         implements PostgresExpression, Select<PostgresJoin, PostgresExpression, PostgresTable, PostgresColumn> {
 
+    private static final int FOR_CLAUSE_PROBABILITY = 50;
+
     private SelectType selectOption = SelectType.ALL;
     private List<PostgresJoin> joinClauses = Collections.emptyList();
     private PostgresExpression distinctOnClause;
     private ForClause forClause;
+    private LockWaitOption lockWaitOption = LockWaitOption.NONE;
+    private boolean allowForClause = true;
     private List<PostgresExpression> windowFunctions = new ArrayList<>();
     private final Map<String, WindowDefinition> windowDefinitions = new HashMap<>();
 
@@ -39,6 +44,24 @@ public class PostgresSelect extends SelectBase<PostgresExpression>
         }
 
         public static ForClause getRandom() {
+            return Randomly.fromOptions(values());
+        }
+    }
+
+    public enum LockWaitOption {
+        NONE(""), NOWAIT("NOWAIT"), SKIP_LOCKED("SKIP LOCKED");
+
+        private final String textRepresentation;
+
+        LockWaitOption(String textRepresentation) {
+            this.textRepresentation = textRepresentation;
+        }
+
+        public String getTextRepresentation() {
+            return textRepresentation;
+        }
+
+        public static LockWaitOption getRandom() {
             return Randomly.fromOptions(values());
         }
     }
@@ -189,6 +212,34 @@ public class PostgresSelect extends SelectBase<PostgresExpression>
 
     public ForClause getForClause() {
         return forClause;
+    }
+
+    public void setLockWaitOption(LockWaitOption lockWaitOption) {
+        this.lockWaitOption = lockWaitOption;
+    }
+
+    public LockWaitOption getLockWaitOption() {
+        return lockWaitOption;
+    }
+
+    public void setAllowForClause(boolean allowForClause) {
+        this.allowForClause = allowForClause;
+    }
+
+    public boolean isAllowForClause() {
+        return allowForClause;
+    }
+
+    public void maybeSetRandomForClause(boolean enabled) {
+        if (!enabled || !shouldUseRandomForClause()) {
+            return;
+        }
+        setForClause(ForClause.getRandom());
+        setLockWaitOption(LockWaitOption.getRandom());
+    }
+
+    private static boolean shouldUseRandomForClause() {
+        return ThreadLocalRandom.current().nextInt(100) < FOR_CLAUSE_PROBABILITY;
     }
 
     @Override

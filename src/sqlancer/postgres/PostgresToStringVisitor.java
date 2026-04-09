@@ -189,6 +189,51 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             sb.append(" OFFSET ");
             visit(s.getOffsetClause());
         }
+        if (canRenderForClause(s)) {
+            sb.append(" FOR ");
+            sb.append(s.getForClause().getTextRepresentation());
+            if (s.getLockWaitOption() != null && !s.getLockWaitOption().getTextRepresentation().isEmpty()) {
+                sb.append(" ");
+                sb.append(s.getLockWaitOption().getTextRepresentation());
+            }
+        }
+    }
+
+    private boolean canRenderForClause(PostgresSelect select) {
+        if (!select.isAllowForClause() || select.getForClause() == null) {
+            return false;
+        }
+        if (select.getSelectOption() != PostgresSelect.SelectType.ALL || select.getDistinctOnClause() != null) {
+            return false;
+        }
+        if (!select.getGroupByExpressions().isEmpty() || select.getHavingClause() != null) {
+            return false;
+        }
+        if (select.getWindowFunctions() != null && !select.getWindowFunctions().isEmpty()) {
+            return false;
+        }
+        if (select.getFetchColumns() != null
+                && select.getFetchColumns().stream().anyMatch(PostgresAggregate.class::isInstance)) {
+            return false;
+        }
+        if (select.getFromList().stream().anyMatch(this::locksDerivedOrViewRelation)) {
+            return false;
+        }
+        if (select.getJoinClauses().stream().map(PostgresJoin::getTableReference).anyMatch(this::locksDerivedOrViewRelation)) {
+            return false;
+        }
+        return select.getJoinClauses().stream().noneMatch(j -> j.getType() == PostgresJoinType.LEFT
+                || j.getType() == PostgresJoinType.RIGHT || j.getType() == PostgresJoinType.FULL);
+    }
+
+    private boolean locksDerivedOrViewRelation(PostgresExpression relation) {
+        if (relation instanceof PostgresSubquery) {
+            return true;
+        }
+        if (relation instanceof PostgresFromTable) {
+            return ((PostgresFromTable) relation).getTable().isView();
+        }
+        return false;
     }
 
     @Override

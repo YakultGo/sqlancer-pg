@@ -45,7 +45,7 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
     WHERE {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws SQLException {
-            PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState);
+            PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setAllowForClauses(false);
             ExpectedErrors expectedErrors = ExpectedErrors.newErrors().with(PostgresCommon.getCommonExpressionErrors())
                     .with(PostgresCommon.getCommonFetchErrors())
                     .withRegex(PostgresCommon.getCommonExpressionRegexErrors()).build();

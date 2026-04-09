@@ -182,6 +182,7 @@ public class PostgresTLPAggregateOracle extends PostgresTLPBase implements TestO
     private PostgresSelect getSelect(List<PostgresExpression> aggregates, List<PostgresExpression> from,
             PostgresExpression whereClause, List<PostgresJoin> joinList) {
         PostgresSelect leftSelect = new PostgresSelect();
+        leftSelect.setAllowForClause(false);
         leftSelect.setFetchColumns(aggregates);
         leftSelect.setFromList(from);
         leftSelect.setWhereClause(whereClause);

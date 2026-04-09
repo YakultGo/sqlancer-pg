@@ -22,7 +22,6 @@ import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresJoin;
 import sqlancer.postgres.ast.PostgresJoin.PostgresJoinType;
 import sqlancer.postgres.ast.PostgresSelect;
-import sqlancer.postgres.ast.PostgresSelect.ForClause;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.gen.PostgresCommon;
@@ -54,7 +53,8 @@ public class PostgresTLPBase extends TernaryLogicPartitioningOracleBase<Postgres
     protected List<PostgresJoin> getJoinStatements(PostgresGlobalState globalState, List<PostgresColumn> columns,
             List<PostgresTable> tables) {
         List<PostgresJoin> joinStatements = new ArrayList<>();
-        PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setColumns(columns);
+        PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setColumns(columns)
+                .setAllowForClauses(false);
         for (int i = 1; i < tables.size(); i++) {
             PostgresExpression joinClause = gen.generateExpression(PostgresDataType.BOOLEAN);
             PostgresTable table = Randomly.fromList(tables);
@@ -79,16 +79,14 @@ public class PostgresTLPBase extends TernaryLogicPartitioningOracleBase<Postgres
     protected void generateSelectBase(List<PostgresTable> tables, List<PostgresJoin> joins) {
         List<PostgresExpression> tableList = tables.stream().map(t -> new PostgresFromTable(t, Randomly.getBoolean()))
                 .collect(Collectors.toList());
-        gen = new PostgresExpressionGenerator(state).setColumns(targetTables.getColumns());
+        gen = new PostgresExpressionGenerator(state).setColumns(targetTables.getColumns()).setAllowForClauses(false);
         initializeTernaryPredicateVariants();
         select = new PostgresSelect();
+        select.setAllowForClause(false);
         select.setFetchColumns(generateFetchColumns());
         select.setFromList(tableList);
         select.setWhereClause(null);
         select.setJoinClauses(joins);
-        if (Randomly.getBoolean()) {
-            select.setForClause(ForClause.getRandom());
-        }
     }
 
     List<PostgresExpression> generateFetchColumns() {
@@ -110,7 +108,8 @@ public class PostgresTLPBase extends TernaryLogicPartitioningOracleBase<Postgres
 
     public static PostgresSubquery createSubquery(PostgresGlobalState globalState, String name, PostgresTables tables) {
         List<PostgresExpression> columns = new ArrayList<>();
-        PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setColumns(tables.getColumns());
+        PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setColumns(tables.getColumns())
+                .setAllowForClauses(false);
         for (int i = 0; i < Randomly.smallNumber() + 1; i++) {
             columns.add(gen.generateExpression(0));
         }
@@ -131,9 +130,7 @@ public class PostgresTLPBase extends TernaryLogicPartitioningOracleBase<Postgres
                         PostgresConstant.createIntConstant(Randomly.getPositiveOrZeroNonCachedInteger()));
             }
         }
-        if (Randomly.getBooleanWithRatherLowProbability()) {
-            select.setForClause(ForClause.getRandom());
-        }
+        select.setAllowForClause(false);
         return new PostgresSubquery(select, name);
     }
 
