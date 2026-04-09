@@ -1003,6 +1003,18 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         return createSubquery(globalState, name, tables, true);
     }
 
+    public static List<String> getLockableTableRefs(PostgresSelect select) {
+        List<String> refs = new ArrayList<>();
+        select.getFromList().stream().filter(PostgresFromTable.class::isInstance).map(PostgresFromTable.class::cast)
+                .map(PostgresFromTable::getTable).filter(t -> !t.isView()).map(t -> t.getName()).forEach(refs::add);
+        select.getJoinClauses().stream()
+                .filter(j -> j.getType() == PostgresJoinType.INNER || j.getType() == PostgresJoinType.CROSS)
+                .map(PostgresJoin::getTableReference).filter(PostgresFromTable.class::isInstance)
+                .map(PostgresFromTable.class::cast).map(PostgresFromTable::getTable).filter(t -> !t.isView())
+                .map(t -> t.getName()).forEach(refs::add);
+        return refs;
+    }
+
     public static PostgresSubquery createSubquery(PostgresGlobalState globalState, String name, PostgresTables tables,
             boolean allowForClauses) {
         List<PostgresExpression> columns = new ArrayList<>();
@@ -1067,7 +1079,6 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             List<PostgresExpression> windowFunctions = generateWindowFunctions();
             select.setWindowFunctions(windowFunctions);
         }
-        select.maybeSetRandomForClause(allowForClauses);
 
         return select;
     }
@@ -1142,6 +1153,11 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             select.setOrderByClauses(generateOrderBys());
         }
         select.setSelectType(SelectType.ALL);
+        if (select.getForClause() == null) {
+            select.maybeSetRandomForClause(allowForClauses, getLockableTableRefs(select));
+        } else {
+            select.maybeSetForClauseOfReferences(getLockableTableRefs(select));
+        }
         return select.asString();
     }
 
@@ -1154,12 +1170,22 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         select.setWhereClause(null);
         select.setOrderByClauses(List.of());
         select.setSelectType(SelectType.ALL);
+        if (select.getForClause() == null) {
+            select.maybeSetRandomForClause(allowForClauses, getLockableTableRefs(select));
+        } else {
+            select.maybeSetForClauseOfReferences(getLockableTableRefs(select));
+        }
 
         return "SELECT SUM(count) FROM (" + select.asString() + ") as res";
     }
 
     @Override
     public String generateExplainQuery(PostgresSelect select) {
+        if (select.getForClause() == null) {
+            select.maybeSetRandomForClause(allowForClauses, getLockableTableRefs(select));
+        } else {
+            select.maybeSetForClauseOfReferences(getLockableTableRefs(select));
+        }
         return "EXPLAIN " + select.asString();
     }
 

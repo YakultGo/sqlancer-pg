@@ -53,7 +53,7 @@ public final class PostgresRandomQueryGenerator {
                         PostgresConstant.createIntConstant(Randomly.getPositiveOrZeroNonCachedInteger()));
             }
         }
-        select.maybeSetRandomForClause(true);
+        select.maybeSetRandomForClause(true, PostgresExpressionGenerator.getLockableTableRefs(select));
         return select;
     }
 

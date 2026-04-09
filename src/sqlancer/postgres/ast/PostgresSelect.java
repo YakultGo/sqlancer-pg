@@ -3,6 +3,7 @@ package sqlancer.postgres.ast;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -26,6 +27,7 @@ public class PostgresSelect extends SelectBase<PostgresExpression>
     private PostgresExpression distinctOnClause;
     private ForClause forClause;
     private LockWaitOption lockWaitOption = LockWaitOption.NONE;
+    private List<String> forClauseOfReferences = Collections.emptyList();
     private boolean allowForClause = true;
     private List<PostgresExpression> windowFunctions = new ArrayList<>();
     private final Map<String, WindowDefinition> windowDefinitions = new HashMap<>();
@@ -231,15 +233,60 @@ public class PostgresSelect extends SelectBase<PostgresExpression>
     }
 
     public void maybeSetRandomForClause(boolean enabled) {
+        maybeSetRandomForClause(enabled, List.of());
+    }
+
+    public void maybeSetRandomForClause(boolean enabled, List<String> lockableRefs) {
         if (!enabled || !shouldUseRandomForClause()) {
             return;
         }
         setForClause(ForClause.getRandom());
         setLockWaitOption(LockWaitOption.getRandom());
+        maybeSetForClauseOfReferences(lockableRefs);
+    }
+
+    public void maybeSetForClauseOfReferences(List<String> lockableRefs) {
+        if (forClause == null || !forClauseOfReferences.isEmpty() || !shouldUseForClauseOfReferences(lockableRefs)) {
+            return;
+        }
+        List<String> distinctRefs = new ArrayList<>(new LinkedHashSet<>(lockableRefs));
+        setForClauseOfReferences(getRandomForClauseOfReferences(distinctRefs));
     }
 
     private static boolean shouldUseRandomForClause() {
         return ThreadLocalRandom.current().nextInt(100) < FOR_CLAUSE_PROBABILITY;
+    }
+
+    private static boolean shouldUseForClauseOfReferences(List<String> lockableRefs) {
+        if (lockableRefs.isEmpty()) {
+            return false;
+        }
+        int probability = lockableRefs.size() >= 2 ? 45 : 25;
+        return ThreadLocalRandom.current().nextInt(100) < probability;
+    }
+
+    private static List<String> getRandomForClauseOfReferences(List<String> distinctRefs) {
+        if (distinctRefs.size() <= 1) {
+            return distinctRefs;
+        }
+        if (distinctRefs.size() == 2) {
+            return distinctRefs;
+        }
+        List<String> shuffledRefs = new ArrayList<>(distinctRefs);
+        Collections.shuffle(shuffledRefs);
+        if (ThreadLocalRandom.current().nextInt(100) < 80) {
+            int nrRefs = ThreadLocalRandom.current().nextInt(2, distinctRefs.size() + 1);
+            return new ArrayList<>(shuffledRefs.subList(0, nrRefs));
+        }
+        return Randomly.nonEmptySubset(shuffledRefs);
+    }
+
+    public void setForClauseOfReferences(List<String> forClauseOfReferences) {
+        this.forClauseOfReferences = List.copyOf(forClauseOfReferences);
+    }
+
+    public List<String> getForClauseOfReferences() {
+        return forClauseOfReferences;
     }
 
     @Override

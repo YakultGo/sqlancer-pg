@@ -192,6 +192,10 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
         if (canRenderForClause(s)) {
             sb.append(" FOR ");
             sb.append(s.getForClause().getTextRepresentation());
+            if (!s.getForClauseOfReferences().isEmpty()) {
+                sb.append(" OF ");
+                sb.append(String.join(", ", s.getForClauseOfReferences()));
+            }
             if (s.getLockWaitOption() != null && !s.getLockWaitOption().getTextRepresentation().isEmpty()) {
                 sb.append(" ");
                 sb.append(s.getLockWaitOption().getTextRepresentation());
