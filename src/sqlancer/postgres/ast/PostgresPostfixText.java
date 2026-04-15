@@ -1,5 +1,6 @@
 package sqlancer.postgres.ast;
 
+import sqlancer.postgres.PostgresCompoundDataType;
 import sqlancer.postgres.PostgresSchema.PostgresDataType;
 
 public class PostgresPostfixText implements PostgresExpression {
@@ -7,10 +8,15 @@ public class PostgresPostfixText implements PostgresExpression {
     private final PostgresExpression expr;
     private final String text;
     private final PostgresConstant expectedValue;
-    private final PostgresDataType type;
+    private final PostgresCompoundDataType type;
 
     public PostgresPostfixText(PostgresExpression expr, String text, PostgresConstant expectedValue,
             PostgresDataType type) {
+        this(expr, text, expectedValue, PostgresCompoundDataType.create(type));
+    }
+
+    public PostgresPostfixText(PostgresExpression expr, String text, PostgresConstant expectedValue,
+            PostgresCompoundDataType type) {
         this.expr = expr;
         this.text = text;
         this.expectedValue = expectedValue;
@@ -32,6 +38,11 @@ public class PostgresPostfixText implements PostgresExpression {
 
     @Override
     public PostgresDataType getExpressionType() {
+        return type.getDataType();
+    }
+
+    @Override
+    public PostgresCompoundDataType getExpressionCompoundType() {
         return type;
     }
 }

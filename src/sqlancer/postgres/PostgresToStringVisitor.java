@@ -220,24 +220,8 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
                 && select.getFetchColumns().stream().anyMatch(PostgresAggregate.class::isInstance)) {
             return false;
         }
-        if (select.getFromList().stream().anyMatch(this::locksDerivedOrViewRelation)) {
-            return false;
-        }
-        if (select.getJoinClauses().stream().map(PostgresJoin::getTableReference).anyMatch(this::locksDerivedOrViewRelation)) {
-            return false;
-        }
         return select.getJoinClauses().stream().noneMatch(j -> j.getType() == PostgresJoinType.LEFT
                 || j.getType() == PostgresJoinType.RIGHT || j.getType() == PostgresJoinType.FULL);
-    }
-
-    private boolean locksDerivedOrViewRelation(PostgresExpression relation) {
-        if (relation instanceof PostgresSubquery) {
-            return true;
-        }
-        if (relation instanceof PostgresFromTable) {
-            return ((PostgresFromTable) relation).getTable().isView();
-        }
-        return false;
     }
 
     @Override
@@ -308,6 +292,10 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
 
     private void appendType(PostgresCastOperation cast) {
         PostgresCompoundDataType compoundType = cast.getCompoundType();
+        if (compoundType.isArray()) {
+            appendArrayType(compoundType);
+            return;
+        }
         switch (compoundType.getDataType()) {
         case BOOLEAN:
             sb.append("BOOLEAN");
@@ -374,6 +362,76 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
         }
     }
 
+    private void appendArrayType(PostgresCompoundDataType compoundType) {
+        appendScalarType(compoundType.getElemType());
+        sb.append("[]");
+    }
+
+    private void appendScalarType(PostgresCompoundDataType compoundType) {
+        if (compoundType.isArray()) {
+            appendArrayType(compoundType);
+            return;
+        }
+        switch (compoundType.getDataType()) {
+        case BOOLEAN:
+            sb.append("BOOLEAN");
+            break;
+        case INT:
+            sb.append("INT");
+            break;
+        case TEXT:
+            sb.append(Randomly.fromOptions("VARCHAR"));
+            break;
+        case REAL:
+            sb.append("FLOAT");
+            break;
+        case DECIMAL:
+            sb.append("DECIMAL");
+            break;
+        case FLOAT:
+            sb.append("REAL");
+            break;
+        case RANGE:
+            sb.append("int4range");
+            break;
+        case MONEY:
+            sb.append("MONEY");
+            break;
+        case INET:
+            sb.append("INET");
+            break;
+        case BIT:
+            sb.append("BIT");
+            break;
+        case DATE:
+            sb.append("DATE");
+            break;
+        case TIME:
+            sb.append("TIME");
+            break;
+        case TIMETZ:
+            sb.append("TIME WITH TIME ZONE");
+            break;
+        case TIMESTAMP:
+            sb.append("TIMESTAMP");
+            break;
+        case TIMESTAMPTZ:
+            sb.append("TIMESTAMP WITH TIME ZONE");
+            break;
+        case INTERVAL:
+            sb.append("INTERVAL");
+            break;
+        default:
+            throw new AssertionError(compoundType);
+        }
+        Optional<Integer> size = compoundType.getSize();
+        if (size.isPresent()) {
+            sb.append("(");
+            sb.append(size.get());
+            sb.append(")");
+        }
+    }
+
     @Override
     public void visit(PostgresBetweenOperation op) {
         sb.append("(");
@@ -412,7 +470,9 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
 
     @Override
     public void visit(PostgresPostfixText op) {
+        sb.append("(");
         visit(op.getExpr());
+        sb.append(")");
         sb.append(op.getText());
     }
 

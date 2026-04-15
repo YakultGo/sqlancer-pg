@@ -1,6 +1,7 @@
 package sqlancer.postgres;
 
 import java.sql.ResultSet;
+import java.sql.Array;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Statement;
@@ -32,10 +33,11 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
     public enum PostgresDataType {
         INT, BOOLEAN, TEXT, DECIMAL, FLOAT, REAL, RANGE, MONEY, BIT, INET, DATE, TIME, TIMETZ, TIMESTAMP,
-        TIMESTAMPTZ, INTERVAL;
+        TIMESTAMPTZ, INTERVAL, ARRAY;
 
         public static PostgresDataType getRandomType() {
             List<PostgresDataType> dataTypes = new ArrayList<>(Arrays.asList(values()));
+            dataTypes.remove(PostgresDataType.ARRAY);
             if (PostgresProvider.generateOnlyKnown) {
                 dataTypes.remove(PostgresDataType.DECIMAL);
                 dataTypes.remove(PostgresDataType.FLOAT);
@@ -51,13 +53,24 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     }
 
     public static class PostgresColumn extends AbstractTableColumn<PostgresTable, PostgresDataType> {
+        private final PostgresCompoundDataType compoundType;
 
         public PostgresColumn(String name, PostgresDataType columnType) {
             super(name, null, columnType);
+            this.compoundType = PostgresCompoundDataType.create(columnType);
+        }
+
+        public PostgresColumn(String name, PostgresCompoundDataType compoundType) {
+            super(name, null, compoundType.getDataType());
+            this.compoundType = compoundType;
         }
 
         public static PostgresColumn createDummy(String name) {
             return new PostgresColumn(name, PostgresDataType.INT);
+        }
+
+        public PostgresCompoundDataType getCompoundType() {
+            return compoundType;
         }
 
     }
@@ -88,38 +101,7 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
                     if (randomRowValues.getString(columnIndex) == null) {
                         constant = PostgresConstant.createNullConstant();
                     } else {
-                        switch (column.getType()) {
-                        case INT:
-                            constant = PostgresConstant.createIntConstant(randomRowValues.getLong(columnIndex));
-                            break;
-                        case BOOLEAN:
-                            constant = PostgresConstant.createBooleanConstant(randomRowValues.getBoolean(columnIndex));
-                            break;
-                        case TEXT:
-                            constant = PostgresConstant.createTextConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        case DATE:
-                            constant = PostgresConstant.createDateConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        case TIME:
-                            constant = PostgresConstant.createTimeConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        case TIMETZ:
-                            constant = PostgresConstant.createTimeWithTimeZoneConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        case TIMESTAMP:
-                            constant = PostgresConstant.createTimestampConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        case TIMESTAMPTZ:
-                            constant = PostgresConstant
-                                    .createTimestampWithTimeZoneConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        case INTERVAL:
-                            constant = PostgresConstant.createIntervalConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        default:
-                            throw new IgnoreMeException();
-                        }
+                        constant = getColumnValue(randomRowValues, columnIndex, column.getCompoundType());
                     }
                     values.put(column, constant);
                 }
@@ -134,53 +116,152 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     }
 
     public static PostgresDataType getColumnType(String typeString) {
-        String normalizedType = typeString.trim().toLowerCase();
+        return getColumnCompoundType(typeString, null).getDataType();
+    }
+
+    public static PostgresCompoundDataType getColumnCompoundType(String typeString, String elementTypeString) {
+        if (typeString == null) {
+            throw new AssertionError("typeString must not be null");
+        }
+        String normalizedType = normalizeTypeName(typeString);
+        if ("array".equals(normalizedType)) {
+            if (elementTypeString == null) {
+                throw new AssertionError(typeString);
+            }
+            PostgresCompoundDataType arrayType = PostgresCompoundDataType.createArray(
+                    getColumnCompoundType(stripArrayUdtPrefix(elementTypeString), null));
+            if (!arrayType.isSupportedArrayType()) {
+                throw new IgnoreMeException();
+            }
+            return arrayType;
+        }
+        if (normalizedType.endsWith("[]")) {
+            PostgresCompoundDataType arrayType = PostgresCompoundDataType
+                    .createArray(getColumnCompoundType(normalizedType.substring(0, normalizedType.length() - 2), null));
+            if (!arrayType.isSupportedArrayType()) {
+                throw new IgnoreMeException();
+            }
+            return arrayType;
+        }
         switch (normalizedType) {
         case "smallint":
+        case "int2":
         case "integer":
+        case "int4":
         case "bigint":
-            return PostgresDataType.INT;
+        case "int8":
+            return PostgresCompoundDataType.create(PostgresDataType.INT);
         case "boolean":
-            return PostgresDataType.BOOLEAN;
+        case "bool":
+            return PostgresCompoundDataType.create(PostgresDataType.BOOLEAN);
         case "text":
         case "character":
+        case "bpchar":
         case "character varying":
+        case "varchar":
         case "name":
         case "regclass":
-            return PostgresDataType.TEXT;
+            return PostgresCompoundDataType.create(PostgresDataType.TEXT);
         case "numeric":
-            return PostgresDataType.DECIMAL;
+            return PostgresCompoundDataType.create(PostgresDataType.DECIMAL);
         case "double precision":
-            return PostgresDataType.FLOAT;
+            return PostgresCompoundDataType.create(PostgresDataType.FLOAT);
         case "real":
-            return PostgresDataType.REAL;
+            return PostgresCompoundDataType.create(PostgresDataType.REAL);
         case "int4range":
-            return PostgresDataType.RANGE;
+            return PostgresCompoundDataType.create(PostgresDataType.RANGE);
         case "money":
-            return PostgresDataType.MONEY;
+            return PostgresCompoundDataType.create(PostgresDataType.MONEY);
         case "bit":
         case "bit varying":
-            return PostgresDataType.BIT;
+        case "varbit":
+            return PostgresCompoundDataType.create(PostgresDataType.BIT);
         case "inet":
-            return PostgresDataType.INET;
+            return PostgresCompoundDataType.create(PostgresDataType.INET);
         case "date":
-            return PostgresDataType.DATE;
+            return PostgresCompoundDataType.create(PostgresDataType.DATE);
         case "time without time zone":
         case "time":
-            return PostgresDataType.TIME;
+            return PostgresCompoundDataType.create(PostgresDataType.TIME);
         case "time with time zone":
         case "timetz":
-            return PostgresDataType.TIMETZ;
+            return PostgresCompoundDataType.create(PostgresDataType.TIMETZ);
         case "timestamp without time zone":
         case "timestamp":
-            return PostgresDataType.TIMESTAMP;
+            return PostgresCompoundDataType.create(PostgresDataType.TIMESTAMP);
         case "timestamp with time zone":
         case "timestamptz":
-            return PostgresDataType.TIMESTAMPTZ;
+            return PostgresCompoundDataType.create(PostgresDataType.TIMESTAMPTZ);
         case "interval":
-            return PostgresDataType.INTERVAL;
+            return PostgresCompoundDataType.create(PostgresDataType.INTERVAL);
         default:
             throw new AssertionError(typeString);
+        }
+    }
+
+    private static String normalizeTypeName(String typeString) {
+        String normalizedType = typeString.trim().toLowerCase();
+        int parenIndex = normalizedType.indexOf('(');
+        if (parenIndex != -1) {
+            normalizedType = normalizedType.substring(0, parenIndex).trim();
+        }
+        return normalizedType;
+    }
+
+    public static boolean isSupportedArrayElementType(PostgresDataType type) {
+        switch (type) {
+        case INT:
+        case BOOLEAN:
+        case TEXT:
+        case DATE:
+        case TIME:
+        case TIMESTAMP:
+        case TIMESTAMPTZ:
+        case INTERVAL:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    private static String stripArrayUdtPrefix(String elementTypeString) {
+        String normalizedType = elementTypeString.trim().toLowerCase();
+        while (normalizedType.startsWith("_")) {
+            normalizedType = normalizedType.substring(1);
+        }
+        return normalizedType;
+    }
+
+    private static PostgresConstant getColumnValue(ResultSet rs, int columnIndex, PostgresCompoundDataType compoundType)
+            throws SQLException {
+        if (compoundType.isArray()) {
+            Array array = rs.getArray(columnIndex);
+            if (array == null) {
+                return PostgresConstant.createNullConstant();
+            }
+            return PostgresConstant.createArrayConstant(array, compoundType);
+        }
+        switch (compoundType.getDataType()) {
+        case INT:
+            return PostgresConstant.createIntConstant(rs.getLong(columnIndex));
+        case BOOLEAN:
+            return PostgresConstant.createBooleanConstant(rs.getBoolean(columnIndex));
+        case TEXT:
+            return PostgresConstant.createTextConstant(rs.getString(columnIndex));
+        case DATE:
+            return PostgresConstant.createDateConstant(rs.getString(columnIndex));
+        case TIME:
+            return PostgresConstant.createTimeConstant(rs.getString(columnIndex));
+        case TIMETZ:
+            return PostgresConstant.createTimeWithTimeZoneConstant(rs.getString(columnIndex));
+        case TIMESTAMP:
+            return PostgresConstant.createTimestampConstant(rs.getString(columnIndex));
+        case TIMESTAMPTZ:
+            return PostgresConstant.createTimestampWithTimeZoneConstant(rs.getString(columnIndex));
+        case INTERVAL:
+            return PostgresConstant.createIntervalConstant(rs.getString(columnIndex));
+        default:
+            throw new IgnoreMeException();
         }
     }
 
@@ -353,13 +434,36 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     protected static List<PostgresColumn> getTableColumns(SQLConnection con, String tableName) throws SQLException {
         List<PostgresColumn> columns = new ArrayList<>();
         try (Statement s = con.createStatement()) {
-            try (ResultSet rs = s
-                    .executeQuery("select column_name, data_type from INFORMATION_SCHEMA.COLUMNS where table_name = '"
-                            + tableName + "' ORDER BY column_name")) {
+            try (ResultSet rs = s.executeQuery(
+                    "select c.column_name, c.data_type, c.udt_name, pg_catalog.format_type(a.atttypid, a.atttypmod) as formatted_type, a.attndims "
+                            + "from INFORMATION_SCHEMA.COLUMNS c "
+                            + "join pg_catalog.pg_namespace n on n.nspname = c.table_schema "
+                            + "join pg_catalog.pg_class cl on cl.relname = c.table_name and cl.relnamespace = n.oid "
+                            + "join pg_catalog.pg_attribute a on a.attrelid = cl.oid and a.attname = c.column_name "
+                            + "where c.table_name = '" + tableName + "' and a.attnum > 0 and not a.attisdropped "
+                            + "ORDER BY c.column_name")) {
                 while (rs.next()) {
                     String columnName = rs.getString("column_name");
                     String dataType = rs.getString("data_type");
-                    PostgresColumn c = new PostgresColumn(columnName, getColumnType(dataType));
+                    String udtName = rs.getString("udt_name");
+                    String formattedType = rs.getString("formatted_type");
+                    int arrayDimensions = rs.getInt("attndims");
+                    String elementType = null;
+                    if ("array".equalsIgnoreCase(dataType) && udtName != null && udtName.startsWith("_")) {
+                        elementType = udtName.substring(1);
+                    }
+                    PostgresCompoundDataType compoundType;
+                    if ("array".equalsIgnoreCase(dataType) && arrayDimensions > 0 && elementType != null) {
+                        compoundType = PostgresCompoundDataType
+                                .createArray(getColumnCompoundType(stripArrayUdtPrefix(elementType), null), arrayDimensions);
+                        if (!compoundType.isSupportedArrayType()) {
+                            throw new IgnoreMeException();
+                        }
+                    } else {
+                        String typeString = "array".equalsIgnoreCase(dataType) && formattedType != null ? formattedType : dataType;
+                        compoundType = getColumnCompoundType(typeString, elementType);
+                    }
+                    PostgresColumn c = new PostgresColumn(columnName, compoundType);
                     columns.add(c);
                 }
             }

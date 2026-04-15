@@ -12,6 +12,7 @@ import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.postgres.PostgresGlobalState;
+import sqlancer.postgres.PostgresCompoundDataType;
 import sqlancer.postgres.PostgresProvider;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
 import sqlancer.postgres.PostgresSchema.PostgresDataType;
@@ -228,8 +229,20 @@ public final class PostgresCommon {
 
     public static boolean appendDataType(PostgresDataType type, StringBuilder sb, boolean allowSerial,
             boolean generateOnlyKnown, List<String> opClasses) throws AssertionError {
+        return appendDataType(PostgresCompoundDataType.create(type), sb, allowSerial, generateOnlyKnown, opClasses);
+    }
+
+    public static boolean appendDataType(PostgresCompoundDataType compoundType, StringBuilder sb, boolean allowSerial,
+            boolean generateOnlyKnown, List<String> opClasses) throws AssertionError {
+        if (compoundType.isArray()) {
+            // PostgreSQL array type declarations attach [] to the element type name, but do not allow an element
+            // collation clause inline in the type declaration.
+            appendDataType(compoundType.getElemType(), sb, false, true, opClasses);
+            sb.append("[]");
+            return false;
+        }
         boolean serial = false;
-        switch (type) {
+        switch (compoundType.getDataType()) {
         case BOOLEAN:
             sb.append("boolean");
             break;
@@ -246,7 +259,7 @@ public final class PostgresCommon {
                 sb.append("TEXT");
             } else if (Randomly.getBoolean()) {
                 // TODO: support CHAR (without VAR)
-                if (PostgresProvider.generateOnlyKnown || Randomly.getBoolean()) {
+                if (generateOnlyKnown || Randomly.getBoolean()) {
                     sb.append("VAR");
                 }
                 sb.append("CHAR");
@@ -256,7 +269,7 @@ public final class PostgresCommon {
             } else {
                 sb.append("name");
             }
-            if (Randomly.getBoolean() && !PostgresProvider.generateOnlyKnown) {
+            if (Randomly.getBoolean() && !generateOnlyKnown) {
                 sb.append(" COLLATE ");
                 sb.append('"');
                 sb.append(Randomly.fromList(opClasses));
@@ -309,7 +322,7 @@ public final class PostgresCommon {
             sb.append("interval");
             break;
         default:
-            throw new AssertionError(type);
+            throw new AssertionError(compoundType);
         }
         return serial;
     }

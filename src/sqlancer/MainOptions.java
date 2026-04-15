@@ -123,6 +123,12 @@ public class MainOptions {
     @Parameter(names = "--database-prefix", description = "The prefix used for each database created")
     private String databasePrefix = "database"; // NOPMD
 
+    @Parameter(names = "--table-columns", description = "Specifies the number of columns generated in CREATE TABLE statements")
+    private int tableColumns = 10; // NOPMD
+
+    @Parameter(names = "--generate-sql-num", description = "Specifies the number of rows generated in regular INSERT ... VALUES statements")
+    private int generateSqlNum = 3; // NOPMD
+
     @Parameter(names = "--serialize-reproduce-state", description = "Serialize the state to reproduce")
     private boolean serializeReproduceState = false; // NOPMD
 
@@ -301,6 +307,14 @@ public class MainOptions {
 
     public String getDatabasePrefix() {
         return databasePrefix;
+    }
+
+    public int getTableColumns() {
+        return tableColumns;
+    }
+
+    public int getGenerateSqlNum() {
+        return generateSqlNum;
     }
 
     public boolean performConnectionTest() {

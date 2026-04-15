@@ -6,6 +6,7 @@ import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
+import sqlancer.postgres.PostgresCompoundDataType;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
 import sqlancer.postgres.PostgresSchema.PostgresDataType;
@@ -185,7 +186,7 @@ public class PostgresAlterTableGenerator {
                     sb.append(" SET DATA");
                 }
                 sb.append(" TYPE ");
-                PostgresDataType randomType = PostgresDataType.getRandomType();
+                PostgresCompoundDataType randomType = getRandomCompoundType();
                 PostgresCommon.appendDataType(randomType, sb, false, generateOnlyKnown, opClasses);
                 // TODO [ COLLATE collation ] [ USING expression ]
                 errors.add("cannot alter type of a column used by a view or rule");
@@ -220,7 +221,7 @@ public class PostgresAlterTableGenerator {
                 } else {
                     sb.append("SET DEFAULT ");
                     sb.append(PostgresVisitor.asString(
-                            PostgresExpressionGenerator.generateExpression(globalState, randomColumn.getType())));
+                            PostgresExpressionGenerator.generateExpression(globalState, randomColumn.getCompoundType())));
                     errors.add("is out of range");
                     errors.add("but default expression is of type");
                     errors.add("cannot cast");
@@ -427,6 +428,13 @@ public class PostgresAlterTableGenerator {
         }
 
         return new SQLQueryAdapter(sb.toString(), errors, true);
+    }
+
+    private PostgresCompoundDataType getRandomCompoundType() {
+        if (Randomly.getBooleanWithRatherLowProbability()) {
+            return PostgresExpressionGenerator.getRandomArrayType(Randomly.getBoolean() ? 1 : 2);
+        }
+        return PostgresCompoundDataType.create(PostgresDataType.getRandomType());
     }
 
     private static void alterColumn(PostgresTable randomTable, StringBuilder sb) {

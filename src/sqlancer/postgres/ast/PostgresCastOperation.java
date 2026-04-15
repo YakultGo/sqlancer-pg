@@ -22,12 +22,17 @@ public class PostgresCastOperation implements PostgresExpression {
     }
 
     @Override
+    public PostgresCompoundDataType getExpressionCompoundType() {
+        return type;
+    }
+
+    @Override
     public PostgresConstant getExpectedValue() {
         PostgresConstant expectedValue = expression.getExpectedValue();
         if (expectedValue == null) {
             return null;
         }
-        return expectedValue.cast(type.getDataType());
+        return expectedValue.cast(type);
     }
 
     public PostgresExpression getExpression() {

@@ -8,6 +8,7 @@ import sqlancer.Randomly;
 import sqlancer.common.DBMSCommon;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
+import sqlancer.postgres.PostgresCompoundDataType;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.PostgresSchema;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
@@ -80,7 +81,7 @@ public class PostgresTableGenerator {
         }
         sb.append(" ");
         sb.append(tableName);
-        if (Randomly.getBoolean() && !newSchema.getDatabaseTables().isEmpty()) {
+        if (Randomly.getBooleanWithRatherLowProbability() && !newSchema.getDatabaseTables().isEmpty()) {
             createLike();
         } else {
             createStandard();
@@ -88,9 +89,30 @@ public class PostgresTableGenerator {
         return new SQLQueryAdapter(sb.toString(), errors, true);
     }
 
+    private PostgresExpression generateDefaultExpression(PostgresCompoundDataType type) {
+        Randomly r = globalState.getRandomly();
+        if (type.isArray()) {
+            return PostgresExpressionGenerator.generateConstant(r, type);
+        }
+        switch (type.getDataType()) {
+        case DATE:
+        case TIME:
+        case TIMETZ:
+        case TIMESTAMP:
+        case TIMESTAMPTZ:
+        case INTERVAL:
+            // Bare NULL and temporal arithmetic can degrade into "unknown" or interval-typed defaults.
+            // Typed constants/casts keep DEFAULT expressions stable while still exercising temporal types.
+            return PostgresExpressionGenerator.generateConstant(r, type);
+        default:
+            return PostgresExpressionGenerator.generateExpression(globalState, type);
+        }
+    }
+
     private void createStandard() throws AssertionError {
         sb.append("(");
-        for (int i = 0; i < Randomly.smallNumber() + 1; i++) {
+        int columnCount = globalState.getOptions().getTableColumns();
+        for (int i = 0; i < columnCount; i++) {
             if (i != 0) {
                 sb.append(", ");
             }
@@ -143,15 +165,22 @@ public class PostgresTableGenerator {
     private void createColumn(String name) throws AssertionError {
         sb.append(name);
         sb.append(" ");
-        PostgresDataType type = PostgresDataType.getRandomType();
+        PostgresCompoundDataType type = getRandomColumnType();
         boolean serial = PostgresCommon.appendDataType(type, sb, true, generateOnlyKnown, globalState.getCollates());
         PostgresColumn c = new PostgresColumn(name, type);
         c.setTable(table);
         columnsToBeAdded.add(c);
         sb.append(" ");
-        if (Randomly.getBoolean()) {
-            createColumnConstraint(type, serial);
+        if (Randomly.getBoolean() && !type.isArray()) {
+            createColumnConstraint(type.getDataType(), serial);
         }
+    }
+
+    private PostgresCompoundDataType getRandomColumnType() {
+        if (Randomly.getBooleanWithSmallProbability()) {
+            return PostgresExpressionGenerator.getRandomArrayType(Randomly.getBoolean() ? 1 : 2);
+        }
+        return PostgresCompoundDataType.create(PostgresDataType.getRandomType());
     }
 
     private void generatePartitionBy() {
@@ -268,7 +297,7 @@ public class PostgresTableGenerator {
             case DEFAULT:
                 sb.append("DEFAULT");
                 sb.append(" (");
-                sb.append(PostgresVisitor.asString(PostgresExpressionGenerator.generateExpression(globalState, type)));
+                sb.append(PostgresVisitor.asString(generateDefaultExpression(PostgresCompoundDataType.create(type))));
                 sb.append(")");
                 // CREATE TEMPORARY TABLE t1(c0 smallint DEFAULT ('566963878'));
                 errors.add("out of range");

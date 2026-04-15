@@ -1,6 +1,7 @@
 package sqlancer.postgres.ast;
 
 import sqlancer.postgres.PostgresSchema.PostgresDataType;
+import sqlancer.postgres.ast.PostgresConstant.ArrayConstant;
 
 public class PostgresFunction implements PostgresExpression {
 
@@ -96,6 +97,58 @@ public class PostgresFunction implements PostgresExpression {
             @Override
             public PostgresDataType[] getInputTypesForReturnType(PostgresDataType returnType, int nrArguments) {
                 return new PostgresDataType[] { PostgresDataType.TEXT };
+            }
+        },
+        ARRAY_LENGTH(2, "array_length") {
+            @Override
+            public PostgresConstant apply(PostgresConstant[] evaluatedArgs, PostgresExpression... args) {
+                if (evaluatedArgs[0].isNull() || evaluatedArgs[1].isNull()) {
+                    return PostgresConstant.createNullConstant();
+                }
+                if (!(evaluatedArgs[0] instanceof ArrayConstant)) {
+                    return null;
+                }
+                Integer length = ((ArrayConstant) evaluatedArgs[0]).getLength((int) evaluatedArgs[1].asInt());
+                if (length == null) {
+                    return PostgresConstant.createNullConstant();
+                }
+                return PostgresConstant.createIntConstant(length);
+            }
+
+            @Override
+            public boolean supportsReturnType(PostgresDataType type) {
+                return type == PostgresDataType.INT;
+            }
+
+            @Override
+            public PostgresDataType[] getInputTypesForReturnType(PostgresDataType returnType, int nrArguments) {
+                return new PostgresDataType[] { PostgresDataType.ARRAY, PostgresDataType.INT };
+            }
+        },
+        CARDINALITY(1, "cardinality") {
+            @Override
+            public PostgresConstant apply(PostgresConstant[] evaluatedArgs, PostgresExpression... args) {
+                if (evaluatedArgs[0].isNull()) {
+                    return PostgresConstant.createNullConstant();
+                }
+                if (!(evaluatedArgs[0] instanceof ArrayConstant)) {
+                    return null;
+                }
+                int cardinality = ((ArrayConstant) evaluatedArgs[0]).getCardinality();
+                if (cardinality < 0) {
+                    return null;
+                }
+                return PostgresConstant.createIntConstant(cardinality);
+            }
+
+            @Override
+            public boolean supportsReturnType(PostgresDataType type) {
+                return type == PostgresDataType.INT;
+            }
+
+            @Override
+            public PostgresDataType[] getInputTypesForReturnType(PostgresDataType returnType, int nrArguments) {
+                return new PostgresDataType[] { PostgresDataType.ARRAY };
             }
         },
         UPPER(1, "upper") {

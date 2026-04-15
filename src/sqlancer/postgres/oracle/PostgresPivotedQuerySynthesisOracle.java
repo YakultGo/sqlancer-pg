@@ -74,7 +74,7 @@ public class PostgresPivotedQuerySynthesisOracle
      */
     private PostgresColumn getFetchValueAliasedColumn(PostgresColumn c) {
         PostgresColumn aliasedColumn = new PostgresColumn(c.getName() + " AS " + c.getTable().getName() + c.getName(),
-                c.getType());
+                c.getCompoundType());
         aliasedColumn.setTable(c.getTable());
         return aliasedColumn;
     }
