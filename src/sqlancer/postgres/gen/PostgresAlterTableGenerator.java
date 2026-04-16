@@ -601,6 +601,9 @@ public class PostgresAlterTableGenerator {
         sb.append(randomTable.getFreeColumnName());
         sb.append(" ");
         PostgresCommon.addTableConstraint(sb, randomTable, globalState, errors);
+        // ADD CONSTRAINT can synthesize CHECK/EXCLUDE expressions over range values, so keep
+        // these errors local to this path even if the caller changes its shared error set.
+        PostgresCommon.addCommonRangeExpressionErrors(errors);
         errors.add("functions in index expression must be marked IMMUTABLE");
         errors.add("functions in index predicate must be marked IMMUTABLE");
         errors.add("has no default operator class for access method");
