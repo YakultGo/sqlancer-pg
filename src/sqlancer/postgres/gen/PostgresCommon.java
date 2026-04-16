@@ -81,6 +81,8 @@ public final class PostgresCommon {
         errors.add("invalid input syntax for type");
         errors.add("cannot cast type");
         errors.add("could not convert type");
+        errors.add("malformed array literal");
+        errors.add("array value must start with \"{\" or dimension information");
         errors.add("value overflows numeric format");
         errors.add("LIKE pattern must not end with escape character");
         errors.add("is of type boolean but expression is of type text");
@@ -205,6 +207,8 @@ public final class PostgresCommon {
         errors.add("value too long for type character");
         errors.add("cannot insert a non-DEFAULT value into column");
         errors.add("not found in view targetlist");
+        errors.add("malformed array literal");
+        errors.add("array value must start with \"{\" or dimension information");
         return errors;
     }
 

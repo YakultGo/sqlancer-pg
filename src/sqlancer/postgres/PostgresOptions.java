@@ -15,7 +15,6 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     public static final String DEFAULT_HOST = "localhost";
     public static final int DEFAULT_PORT = 5432;
     private static Boolean defaultTestTablespaces;
-
     @Parameter(names = "--bulk-insert", description = "Specifies whether INSERT statements should be issued in bulk", arity = 1)
     public boolean allowBulkInsert;
 
@@ -28,7 +27,7 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--test-collations", description = "Specifies whether to test different collations", arity = 1)
     public boolean testCollations = true;
 
-    @Parameter(names = "--test-tablespaces", description = "Specifies whether to test tablespace creation (default is OS-dependent)", arity = 1)
+    @Parameter(names = "--test-tablespaces", description = "Specifies whether to test tablespace creation (default: false)", arity = 1)
     public boolean testTablespaces = false;
 
     @Parameter(names = "--tablespace-path", description = "Base path for tablespace directories (default is OS-dependent)", arity = 1)
@@ -44,8 +43,9 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     private static boolean determineDefaultTablespaceSupport() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("linux")) {
-            System.out.println("[INFO] Linux detected: Enabling tablespace testing by default");
-            return true;
+            System.out.println(
+                    "[INFO] Linux detected: Disabling tablespace testing by default. Override with --test-tablespaces=true if your system supports PostgreSQL tablespaces.");
+            return false;
         } else if (osName.contains("mac") || osName.contains("darwin")) {
             System.out.println(
                     "[INFO] macOS detected: Disabling tablespace testing by default due to different /tmp handling. Override with --test-tablespaces=true and ensure proper directory permissions.");
@@ -106,8 +106,6 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     }
 
     public boolean isTestTablespaces() {
-        // If the user explicitly set the value via command line, use that
-        // Otherwise, use the OS-dependent default
         return testTablespaces || getDefaultTablespaceSupport();
     }
 
