@@ -628,6 +628,7 @@ public class PostgresAlterTableGenerator {
         errors.add("violates foreign key constraint");
         errors.add("unsupported ON COMMIT and foreign key combination");
         errors.add("USING INDEX is not supported on partitioned tables");
+        errors.add("result of range union would not be contiguous");`
         if (Randomly.getBoolean()) {
             sb.append(" NOT VALID");
             errors.add("cannot be marked NOT VALID");
