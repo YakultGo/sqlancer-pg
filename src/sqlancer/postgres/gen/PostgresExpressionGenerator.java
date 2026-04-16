@@ -213,7 +213,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             PostgresCompoundDataType comparisonType = getMeaningfulTypeForComparison();
             return generateComparison(depth, comparisonType);
         case CAST:
-            return new PostgresCastOperation(generateExpression(depth + 1),
+            return new PostgresCastOperation(generateExpression(depth + 1, getRandomNonArrayType()),
                     getCompoundDataType(PostgresDataType.BOOLEAN));
         case FUNCTION:
             return generateFunction(depth + 1, PostgresDataType.BOOLEAN);
@@ -434,7 +434,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                     return generateTemporalExpression(depth + 1, dataType);
                 }
                 if (Randomly.getBoolean()) {
-                    return new PostgresCastOperation(generateExpression(depth + 1), getCompoundDataType(dataType));
+                    return new PostgresCastOperation(generateExpression(depth + 1, getRandomNonArrayType()),
+                            getCompoundDataType(dataType));
                 } else {
                     return generateFunctionWithUnknownResult(depth, dataType);
                 }
@@ -932,7 +933,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         option = Randomly.fromOptions(IntExpression.values());
         switch (option) {
         case CAST:
-            return new PostgresCastOperation(generateExpression(depth + 1), getCompoundDataType(PostgresDataType.INT));
+            return new PostgresCastOperation(generateExpression(depth + 1, getRandomNonArrayType()),
+                    getCompoundDataType(PostgresDataType.INT));
         case UNARY_OPERATION:
             PostgresExpression intExpression = generateExpression(depth + 1, PostgresDataType.INT);
             return new PostgresPrefixOperation(intExpression,

@@ -29,7 +29,7 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     public boolean testCollations = true;
 
     @Parameter(names = "--test-tablespaces", description = "Specifies whether to test tablespace creation (default is OS-dependent)", arity = 1)
-    public boolean testTablespaces;
+    public boolean testTablespaces = false;
 
     @Parameter(names = "--tablespace-path", description = "Base path for tablespace directories (default is OS-dependent)", arity = 1)
     public String tablespacePath = getDefaultTablespacePath();

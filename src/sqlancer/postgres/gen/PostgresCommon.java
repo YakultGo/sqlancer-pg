@@ -80,6 +80,7 @@ public final class PostgresCommon {
         errors.add("invalid input syntax for type money");
         errors.add("invalid input syntax for type");
         errors.add("cannot cast type");
+        errors.add("could not convert type");
         errors.add("value overflows numeric format");
         errors.add("LIKE pattern must not end with escape character");
         errors.add("is of type boolean but expression is of type text");
