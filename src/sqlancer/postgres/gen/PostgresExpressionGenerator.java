@@ -816,7 +816,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
 
         switch (option) {
         case CAST:
-            return new PostgresCastOperation(generateExpression(depth + 1), getCompoundDataType(PostgresDataType.TEXT));
+            return new PostgresCastOperation(generateExpression(depth + 1, getRandomNonArrayType()),
+                    getCompoundDataType(PostgresDataType.TEXT));
         case FUNCTION:
             return generateFunction(depth + 1, PostgresDataType.TEXT);
         case CONCAT:
