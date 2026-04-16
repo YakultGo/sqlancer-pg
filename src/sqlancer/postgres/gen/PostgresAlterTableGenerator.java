@@ -22,7 +22,7 @@ public class PostgresAlterTableGenerator {
     private final Randomly r;
     private static PostgresColumn randomColumn;
     private final boolean generateOnlyKnown;
-    private final List<String> opClasses;
+    private final List<String> collates;
     private final PostgresGlobalState globalState;
 
     protected enum Action {
@@ -105,7 +105,7 @@ public class PostgresAlterTableGenerator {
         this.globalState = globalState;
         this.r = globalState.getRandomly();
         this.generateOnlyKnown = generateOnlyKnown;
-        this.opClasses = globalState.getOpClasses();
+        this.collates = globalState.getCollates();
     }
 
     public static SQLQueryAdapter create(PostgresTable randomTable, PostgresGlobalState globalState,
@@ -416,7 +416,7 @@ public class PostgresAlterTableGenerator {
             }
             sb.append(" TYPE ");
             PostgresCompoundDataType randomType = getRandomCompoundType();
-            PostgresCommon.appendDataType(randomType, sb, false, generateOnlyKnown, opClasses);
+            PostgresCommon.appendDataType(randomType, sb, false, generateOnlyKnown, collates);
             errors.add("cannot alter type of a column used by a view or rule");
             errors.add("cannot convert infinity to numeric");
             errors.add("is duplicated");
@@ -640,7 +640,7 @@ public class PostgresAlterTableGenerator {
         sb.append("ADD COLUMN ");
         sb.append(columnName);
         sb.append(" ");
-        PostgresCommon.appendDataType(type, sb, false, generateOnlyKnown, opClasses);
+        PostgresCommon.appendDataType(type, sb, false, generateOnlyKnown, collates);
         if (Randomly.getBoolean()) {
             sb.append(" DEFAULT ");
             sb.append(PostgresVisitor.asString(PostgresExpressionGenerator.generateExpression(globalState, type)));
