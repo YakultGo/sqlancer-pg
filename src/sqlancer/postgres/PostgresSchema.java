@@ -1,7 +1,7 @@
 package sqlancer.postgres;
 
-import java.sql.ResultSet;
 import java.sql.Array;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Statement;
@@ -282,13 +282,16 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
         private final TableType tableType;
         private final List<PostgresStatisticsObject> statistics;
+        private final List<PostgresConstraint> constraints;
         private final boolean isInsertable;
         private final boolean isPartitioned;
 
         public PostgresTable(String tableName, List<PostgresColumn> columns, List<PostgresIndex> indexes,
-                TableType tableType, List<PostgresStatisticsObject> statistics, boolean isView, boolean isInsertable) {
+                TableType tableType, List<PostgresStatisticsObject> statistics, List<PostgresConstraint> constraints,
+                boolean isView, boolean isInsertable) {
             super(tableName, columns, indexes, isView);
             this.statistics = statistics;
+            this.constraints = constraints;
             this.isInsertable = isInsertable;
             this.tableType = tableType;
             // TODO: simple adapter for other implementations
@@ -296,10 +299,11 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         }
 
         public PostgresTable(String tableName, List<PostgresColumn> columns, List<PostgresIndex> indexes,
-                TableType tableType, List<PostgresStatisticsObject> statistics, boolean isView, boolean isInsertable,
-                boolean isPartitioned) {
+                TableType tableType, List<PostgresStatisticsObject> statistics, List<PostgresConstraint> constraints,
+                boolean isView, boolean isInsertable, boolean isPartitioned) {
             super(tableName, columns, indexes, isView);
             this.statistics = statistics;
+            this.constraints = constraints;
             this.isInsertable = isInsertable;
             this.tableType = tableType;
             this.isPartitioned = isPartitioned;
@@ -307,6 +311,10 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
         public List<PostgresStatisticsObject> getStatistics() {
             return statistics;
+        }
+
+        public List<PostgresConstraint> getConstraints() {
+            return constraints;
         }
 
         public TableType getTableType() {
@@ -323,6 +331,24 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
     }
 
+    public static final class PostgresConstraint {
+        private final String name;
+        private final boolean validatable;
+
+        public PostgresConstraint(String name, boolean validatable) {
+            this.name = name;
+            this.validatable = validatable;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public boolean isValidatable() {
+            return validatable;
+        }
+    }
+
     public static final class PostgresStatisticsObject {
         private final String name;
 
@@ -337,12 +363,29 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
     public static final class PostgresIndex extends TableIndex {
 
-        private PostgresIndex(String indexName) {
+        private final boolean unique;
+        private final boolean valid;
+        private final boolean ready;
+        private final boolean partial;
+        private final boolean expression;
+
+        private PostgresIndex(String indexName, boolean unique, boolean valid, boolean ready, boolean partial,
+                boolean expression) {
             super(indexName);
+            this.unique = unique;
+            this.valid = valid;
+            this.ready = ready;
+            this.partial = partial;
+            this.expression = expression;
         }
 
         public static PostgresIndex create(String indexName) {
-            return new PostgresIndex(indexName);
+            return new PostgresIndex(indexName, false, true, true, false, false);
+        }
+
+        public static PostgresIndex create(String indexName, boolean unique, boolean valid, boolean ready,
+                boolean partial, boolean expression) {
+            return new PostgresIndex(indexName, unique, valid, ready, partial, expression);
         }
 
         @Override
@@ -352,6 +395,34 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
             } else {
                 return super.getIndexName();
             }
+        }
+
+        public boolean isUnique() {
+            return unique;
+        }
+
+        public boolean isValid() {
+            return valid;
+        }
+
+        public boolean isReady() {
+            return ready;
+        }
+
+        public boolean isPartial() {
+            return partial;
+        }
+
+        public boolean isExpression() {
+            return expression;
+        }
+
+        public boolean canBeUsedForAddConstraintUsingIndex() {
+            return unique && valid && ready && !partial && !expression;
+        }
+
+        public boolean canBeUsedForReplicaIdentity() {
+            return unique && valid && ready && !partial && !expression;
         }
 
     }
@@ -365,19 +436,19 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
                     while (rs.next()) {
                         String tableName = rs.getString("table_name");
                         String tableTypeSchema = rs.getString("table_schema");
+                        String relationType = rs.getString("table_type");
+                        String relKind = rs.getString("relkind");
                         boolean isInsertable = rs.getBoolean("is_insertable_into");
-                        boolean isPartitioned = "p".equals(rs.getString("relkind"));
-                        // TODO: also check insertable
-                        // TODO: insert into view?
-                        boolean isView = tableName.startsWith("v"); // tableTypeStr.contains("VIEW") ||
-                                                                    // tableTypeStr.contains("LOCAL TEMPORARY") &&
-                                                                    // !isInsertable;
+                        boolean isPartitioned = "p".equals(relKind);
+                        boolean isView = "VIEW".equalsIgnoreCase(relationType) || "v".equals(relKind)
+                                || "m".equals(relKind);
                         PostgresTable.TableType tableType = getTableType(tableTypeSchema);
                         List<PostgresColumn> databaseColumns = getTableColumns(con, tableName);
                         List<PostgresIndex> indexes = getIndexes(con, tableName);
-                        List<PostgresStatisticsObject> statistics = getStatistics(con);
+                        List<PostgresStatisticsObject> statistics = getStatistics(con, tableName);
+                        List<PostgresConstraint> constraints = getConstraints(con, tableName);
                         PostgresTable t = new PostgresTable(tableName, databaseColumns, indexes, tableType, statistics,
-                                isView, isInsertable, isPartitioned);
+                                constraints, isView, isInsertable, isPartitioned);
                         for (PostgresColumn c : databaseColumns) {
                             c.setTable(t);
                         }
@@ -391,16 +462,56 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         }
     }
 
-    protected static List<PostgresStatisticsObject> getStatistics(SQLConnection con) throws SQLException {
+    protected static List<PostgresStatisticsObject> getStatistics(SQLConnection con, String tableName) throws SQLException {
         List<PostgresStatisticsObject> statistics = new ArrayList<>();
         try (Statement s = con.createStatement()) {
-            try (ResultSet rs = s.executeQuery("SELECT stxname FROM pg_statistic_ext ORDER BY stxname;")) {
+            try (ResultSet rs = s.executeQuery(String.format(
+                    "SELECT stx.stxname FROM pg_statistic_ext stx "
+                            + "JOIN pg_class rel ON rel.oid = stx.stxrelid "
+                            + "JOIN pg_namespace n ON n.oid = rel.relnamespace "
+                            + "WHERE rel.relname = '%s' AND (n.nspname='public' OR n.nspname LIKE 'pg_temp_%%') "
+                            + "ORDER BY stx.stxname;",
+                    tableName))) {
                 while (rs.next()) {
                     statistics.add(new PostgresStatisticsObject(rs.getString("stxname")));
                 }
             }
         }
         return statistics;
+    }
+
+    protected static List<PostgresConstraint> getConstraints(SQLConnection con, String tableName) throws SQLException {
+        List<PostgresConstraint> constraints = new ArrayList<>();
+        try (Statement s = con.createStatement()) {
+            try (ResultSet rs = s.executeQuery(String.format(
+                    "SELECT con.conname FROM pg_constraint con "
+                            + "JOIN pg_class rel ON rel.oid = con.conrelid "
+                            + "JOIN pg_namespace n ON n.oid = rel.relnamespace "
+                            + "WHERE rel.relname = '%s' AND (n.nspname='public' OR n.nspname LIKE 'pg_temp_%%') "
+                            + "ORDER BY con.conname;",
+                    tableName))) {
+                while (rs.next()) {
+                    String name = rs.getString("conname");
+                    boolean validatable = false;
+                    // contype: c = CHECK, f = FOREIGN KEY
+                    try (Statement innerStatement = con.createStatement();
+                            ResultSet typeRs = innerStatement.executeQuery(String.format(
+                                    "SELECT contype FROM pg_constraint con "
+                                            + "JOIN pg_class rel ON rel.oid = con.conrelid "
+                                            + "JOIN pg_namespace n ON n.oid = rel.relnamespace "
+                                            + "WHERE rel.relname = '%s' AND con.conname = '%s' "
+                                            + "AND (n.nspname='public' OR n.nspname LIKE 'pg_temp_%%')",
+                                    tableName, name.replace("'", "''")))) {
+                        if (typeRs.next()) {
+                            String contype = typeRs.getString("contype");
+                            validatable = "c".equals(contype) || "f".equals(contype);
+                        }
+                    }
+                    constraints.add(new PostgresConstraint(name, validatable));
+                }
+            }
+        }
+        return constraints;
     }
 
     protected static PostgresTable.TableType getTableType(String tableTypeStr) throws AssertionError {
@@ -418,12 +529,23 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     protected static List<PostgresIndex> getIndexes(SQLConnection con, String tableName) throws SQLException {
         List<PostgresIndex> indexes = new ArrayList<>();
         try (Statement s = con.createStatement()) {
-            try (ResultSet rs = s.executeQuery(String
-                    .format("SELECT indexname FROM pg_indexes WHERE tablename='%s' ORDER BY indexname;", tableName))) {
+            try (ResultSet rs = s.executeQuery(String.format(
+                    "SELECT i.indexname, ix.indisunique, ix.indisvalid, ix.indisready, "
+                            + "(ix.indpred IS NOT NULL) AS is_partial, (ix.indexprs IS NOT NULL) AS is_expression "
+                            + "FROM pg_indexes i "
+                            + "JOIN pg_class tbl ON tbl.relname = i.tablename "
+                            + "JOIN pg_namespace n ON n.oid = tbl.relnamespace AND n.nspname = i.schemaname "
+                            + "JOIN pg_class idx ON idx.relname = i.indexname AND idx.relnamespace = n.oid "
+                            + "JOIN pg_index ix ON ix.indexrelid = idx.oid "
+                            + "WHERE i.tablename='%s' AND (i.schemaname='public' OR i.schemaname LIKE 'pg_temp_%%') "
+                            + "ORDER BY i.indexname;",
+                    tableName))) {
                 while (rs.next()) {
                     String indexName = rs.getString("indexname");
                     if (DBMSCommon.matchesIndexName(indexName)) {
-                        indexes.add(PostgresIndex.create(indexName));
+                        indexes.add(PostgresIndex.create(indexName, rs.getBoolean("indisunique"),
+                                rs.getBoolean("indisvalid"), rs.getBoolean("indisready"),
+                                rs.getBoolean("is_partial"), rs.getBoolean("is_expression")));
                     }
                 }
             }

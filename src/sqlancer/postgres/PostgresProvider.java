@@ -84,8 +84,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
 
     public enum Action implements AbstractAction<PostgresGlobalState> {
         ANALYZE(PostgresAnalyzeGenerator::create), //
-        ALTER_TABLE(g -> PostgresAlterTableGenerator.create(g.getSchema().getRandomTable(t -> !t.isView()), g,
-                generateOnlyKnown)), //
+        ALTER_TABLE(g -> PostgresAlterTableGenerator.create(g.getSchema().getRandomTable(), g, generateOnlyKnown)), //
         CLUSTER(PostgresClusterGenerator::create), //
         COMMIT(g -> {
             SQLQueryAdapter query;
@@ -144,31 +143,34 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
 
     protected static int mapActions(PostgresGlobalState globalState, Action a) {
         Randomly r = globalState.getRandomly();
+        if (!canUseAction(globalState, a)) {
+            return 0;
+        }
         int nrPerformed;
         switch (a) {
         case CREATE_INDEX:
         case CLUSTER:
-            nrPerformed = r.getInteger(0, 3);
+            nrPerformed = r.getInteger(0, 2);
             break;
         case CREATE_STATISTICS:
-            nrPerformed = r.getInteger(0, 5);
+            nrPerformed = r.getInteger(0, 3);
             break;
         case ALTER_STATISTICS:
             nrPerformed = r.getInteger(0, 2);
             break;
         case DISCARD:
         case DROP_INDEX:
-            nrPerformed = r.getInteger(0, 5);
+            nrPerformed = r.getInteger(0, 3);
             break;
         case COMMIT:
             nrPerformed = r.getInteger(0, 0);
             break;
         case ALTER_TABLE:
-            nrPerformed = r.getInteger(0, 5);
+            nrPerformed = r.getInteger(0, 4);
             break;
         case REINDEX:
         case RESET:
-            nrPerformed = r.getInteger(0, 3);
+            nrPerformed = r.getInteger(0, 2);
             break;
         case DELETE:
         case RESET_ROLE:
@@ -206,6 +208,39 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         }
         return nrPerformed;
 
+    }
+
+    private static boolean canUseAction(PostgresGlobalState globalState, Action action) {
+        List<PostgresSchema.PostgresTable> tables = globalState.getSchema().getDatabaseTables();
+        List<PostgresSchema.PostgresTable> nonViewTables = globalState.getSchema().getDatabaseTablesWithoutViews();
+        switch (action) {
+        case ALTER_TABLE:
+            return !tables.isEmpty();
+        case CLUSTER:
+            return nonViewTables.stream().anyMatch(t -> !t.getIndexes().isEmpty());
+        case CREATE_STATISTICS:
+            return nonViewTables.stream().anyMatch(t -> t.getColumns().size() >= 2);
+        case DROP_STATISTICS:
+        case ALTER_STATISTICS:
+            return tables.stream().anyMatch(t -> !t.getStatistics().isEmpty());
+        case DROP_INDEX:
+        case REINDEX:
+            return tables.stream().anyMatch(t -> !t.getIndexes().isEmpty());
+        case COMMENT_ON:
+            return !tables.isEmpty();
+        case CREATE_VIEW:
+        case CREATE_INDEX:
+        case DELETE:
+        case UPDATE:
+        case TRUNCATE:
+            return !nonViewTables.isEmpty();
+        case INSERT:
+            return tables.stream().anyMatch(t -> t.isInsertable());
+        case CREATE_TABLESPACE:
+            return globalState.getDbmsSpecificOptions().isTestTablespaces();
+        default:
+            return true;
+        }
     }
 
     @Override

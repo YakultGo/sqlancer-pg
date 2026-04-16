@@ -38,7 +38,8 @@ public class PostgresTableGenerator {
         this.newSchema = newSchema;
         this.generateOnlyKnown = generateOnlyKnown;
         this.globalState = globalState;
-        table = new PostgresTable(tableName, columnsToBeAdded, null, null, null, false, false);
+        table = new PostgresTable(tableName, columnsToBeAdded, new ArrayList<>(), null, new ArrayList<>(),
+                new ArrayList<>(), false, false);
         errors.add("invalid input syntax for");
         errors.add("is not unique");
         errors.add("integer out of range");

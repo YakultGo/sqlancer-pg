@@ -28,7 +28,7 @@ public final class PostgresStatisticsGenerator {
             throw new IgnoreMeException();
         }
         sb.append(" ");
-        sb.append(getNewStatisticsName(randomTable));
+        sb.append(getNewStatisticsName(globalState));
         if (Randomly.getBoolean()) {
             sb.append(" (");
             List<String> statsSubset;
@@ -72,8 +72,9 @@ public final class PostgresStatisticsGenerator {
         return new SQLQueryAdapter(sb.toString(), true);
     }
 
-    private static String getNewStatisticsName(PostgresTable randomTable) {
-        List<PostgresStatisticsObject> statistics = randomTable.getStatistics();
+    private static String getNewStatisticsName(PostgresGlobalState globalState) {
+        List<PostgresStatisticsObject> statistics = globalState.getSchema().getDatabaseTables().stream()
+                .flatMap(t -> t.getStatistics().stream()).collect(Collectors.toList());
         int i = 0;
         while (true) {
             String candidateName = "s" + i;
