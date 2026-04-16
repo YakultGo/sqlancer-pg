@@ -156,6 +156,9 @@ public class MainOptions {
     @Parameter(names = "--canonicalize-sql-strings", description = "Should canonicalize query string (add ';' at the end", arity = 1)
     private boolean canonicalizeSqlString = true; // NOPMD
 
+    @Parameter(names = "--index-model", description = "Index generation model: 0=DEFAULT(auto), 1=UNIQUE, 2=PRIMARY_KEY, 3=COMPOSITE, 4=PREFIX_EXPR, 5=SUFFIX_EXPR, 6=EXPRESSION")
+    private int indexModel; // NOPMD
+
     public int getMaxExpressionDepth() {
         return maxExpressionDepth;
     }
@@ -355,6 +358,18 @@ public class MainOptions {
 
     public boolean canonicalizeSqlString() {
         return canonicalizeSqlString;
+    }
+
+    public int getIndexModel() {
+        return indexModel;
+    }
+
+    public void validate() {
+        if (indexModel < 0 || indexModel > 6) {
+            throw new AssertionError(
+                    String.format("Invalid --index-model value %d. Expected one of: 0, 1, 2, 3, 4, 5, 6.",
+                            indexModel));
+        }
     }
 
 }

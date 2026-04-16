@@ -576,6 +576,7 @@ public final class Main {
             return options.getErrorExitCode();
         }
 
+        options.validate();
         Randomly.initialize(options);
         if (options.printProgressInformation()) {
             startProgressMonitor();
