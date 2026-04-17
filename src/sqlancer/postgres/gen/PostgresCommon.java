@@ -232,16 +232,16 @@ public final class PostgresCommon {
     }
 
     public static boolean appendDataType(PostgresDataType type, StringBuilder sb, boolean allowSerial,
-            boolean generateOnlyKnown, List<String> opClasses) throws AssertionError {
-        return appendDataType(PostgresCompoundDataType.create(type), sb, allowSerial, generateOnlyKnown, opClasses);
+            boolean generateOnlyKnown, List<String> collates) throws AssertionError {
+        return appendDataType(PostgresCompoundDataType.create(type), sb, allowSerial, generateOnlyKnown, collates);
     }
 
     public static boolean appendDataType(PostgresCompoundDataType compoundType, StringBuilder sb, boolean allowSerial,
-            boolean generateOnlyKnown, List<String> opClasses) throws AssertionError {
+            boolean generateOnlyKnown, List<String> collates) throws AssertionError {
         if (compoundType.isArray()) {
             // PostgreSQL array type declarations attach [] to the element type name, but do not allow an element
             // collation clause inline in the type declaration.
-            appendDataType(compoundType.getElemType(), sb, false, true, opClasses);
+            appendDataType(compoundType.getElemType(), sb, false, true, collates);
             sb.append("[]");
             return false;
         }
@@ -273,10 +273,10 @@ public final class PostgresCommon {
             } else {
                 sb.append("name");
             }
-            if (Randomly.getBoolean() && !generateOnlyKnown) {
+            if (Randomly.getBoolean() && !generateOnlyKnown && !collates.isEmpty()) {
                 sb.append(" COLLATE ");
                 sb.append('"');
-                sb.append(Randomly.fromList(opClasses));
+                sb.append(Randomly.fromList(collates));
                 sb.append('"');
             }
             break;

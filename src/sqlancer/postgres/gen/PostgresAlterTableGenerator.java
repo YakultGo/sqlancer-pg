@@ -449,8 +449,8 @@ public class PostgresAlterTableGenerator {
                 sb.append("DROP DEFAULT");
             } else {
                 sb.append("SET DEFAULT ");
-                sb.append(PostgresVisitor.asString(
-                        PostgresExpressionGenerator.generateExpression(globalState, randomColumn.getCompoundType())));
+                appendParenthesizedDefaultExpression(sb,
+                        PostgresExpressionGenerator.generateExpression(globalState, randomColumn.getCompoundType()));
                 errors.add("is out of range");
                 errors.add("but default expression is of type");
                 errors.add("cannot cast");
@@ -628,7 +628,7 @@ public class PostgresAlterTableGenerator {
         errors.add("violates foreign key constraint");
         errors.add("unsupported ON COMMIT and foreign key combination");
         errors.add("USING INDEX is not supported on partitioned tables");
-        errors.add("result of range union would not be contiguous");`
+        errors.add("result of range union would not be contiguous");
         if (Randomly.getBoolean()) {
             sb.append(" NOT VALID");
             errors.add("cannot be marked NOT VALID");
@@ -647,7 +647,8 @@ public class PostgresAlterTableGenerator {
         PostgresCommon.appendDataType(type, sb, false, generateOnlyKnown, collates);
         if (Randomly.getBoolean()) {
             sb.append(" DEFAULT ");
-            sb.append(PostgresVisitor.asString(PostgresExpressionGenerator.generateExpression(globalState, type)));
+            appendParenthesizedDefaultExpression(sb,
+                    PostgresExpressionGenerator.generateExpression(globalState, type));
             errors.add("but default expression is of type");
             errors.add("cannot cast");
             errors.add("is out of range");
@@ -662,6 +663,12 @@ public class PostgresAlterTableGenerator {
         errors.add("cannot use column reference in DEFAULT expression");
         errors.add("cannot add column");
         errors.add("cannot add a column to a partition");
+    }
+
+    private void appendParenthesizedDefaultExpression(StringBuilder sb, sqlancer.postgres.ast.PostgresExpression expr) {
+        sb.append("(");
+        sb.append(PostgresVisitor.asString(expr));
+        sb.append(")");
     }
 
     private void appendDropConstraint(StringBuilder sb, ExpectedErrors errors) {
